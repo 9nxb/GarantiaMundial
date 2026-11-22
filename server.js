@@ -6,11 +6,13 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '15mb' }));
 
-const db = new sqlite3.Database('./database.sqlite', (err) => {
+const dbPath = process.env.DB_PATH || './database.sqlite';
+
+const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Erro ao conectar ao banco de dados:', err.message);
     } else {
-        console.log('Conectado ao banco de dados SQLite com sucesso!');
+        console.log('Conectado ao banco de dados SQLite em:', dbPath);
     }
 });
 
@@ -236,7 +238,7 @@ app.put('/garantias/:id/status', (req, res) => {
     );
 });
 
-const PORT = 8082;
+const PORT = process.env.PORT || 8082;
 app.listen(PORT, () => {
-    console.log(`Servidor rodando em http://localhost:${PORT}`);
+    console.log(`Servidor rodando na porta ${PORT}`);
 });
