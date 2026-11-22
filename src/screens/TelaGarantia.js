@@ -10,8 +10,8 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
-// Se testar no celular via Expo Go, troque 'localhost' pelo IP do seu PC (ex: http://192.168.2.251:8082)
-const API_URL = 'http://localhost:8082';
+// Se testar no celular via Expo Go, troque 'localhost' pelo IP do seu PC (ex: https://garantiamundial-production.up.railway.app)
+const API_URL = 'https://garantiamundial-production.up.railway.app';
 
 export function TelaGarantia({ route, navigation }) {
   const { fornecedor } = route.params || { fornecedor: 'Electrolux' };
