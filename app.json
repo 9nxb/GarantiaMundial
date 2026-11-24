@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "c8810b11-7a1d-45fd-aefd-83431716dbf2"
+      }
+    },
+    "owner": "garantiamundial",
+    "android": {
+      "package": "com.garantiamundial.backend"
+    }
+  }
+}

@@ -70,7 +70,7 @@ export function TelaLogin({ navigation }) {
       }
 
       setSenha('');
-      navigation.replace('Fornecedores', { usuario: dados.usuario });
+      navigation.replace('MenuPrincipal', { usuario: dados.usuario });
     } catch (erro) {
       setMensagemErro('Erro de conexão: verifique se o node server.js está rodando na porta 8082.');
     } finally {

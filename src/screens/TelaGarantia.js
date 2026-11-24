@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,166 +6,147 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Image
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { TEMA } from '../utils/tema';
+import { CabecalhoMundial } from '../components/CabecalhoMundial';
+import { BarraFornecedores } from '../components/BarraFornecedores';
 
-// Se testar no celular via Expo Go, troque 'localhost' pelo IP do seu PC (ex: https://garantiamundial-production.up.railway.app)
+// Se testar no celular via Expo Go, troque 'localhost' pelo IPv4 do seu PC (ex: http://192.168.2.251:8082)
 const API_URL = 'https://garantiamundial-production.up.railway.app';
 
-export function TelaGarantia({ route, navigation }) {
-  const { fornecedor } = route.params || { fornecedor: 'Electrolux' };
+const CATEGORIAS = [
+  'Geral / Outra Peça',
+  'Placa Eletrônica',
+  'Compressor',
+  'Controladora',
+  'Unidade Condensadora',
+];
 
-  const categorias = [
-    'Compressor',
-    'Controladora',
-    'Unidade Condensadora',
-    'Placa / Outros'
-  ];
+export function TelaGarantia({ navigation, route }) {
+  const fornecedor = route?.params?.fornecedor || 'Electrolux';
+  const usuario = route?.params?.usuario;
 
-  const [categoria, setCategoria] = useState('Placa / Outros');
+  const [categoria, setCategoria] = useState('Geral / Outra Peça');
   const [codigoPeca, setCodigoPeca] = useState('');
   const [nomePeca, setNomePeca] = useState('');
-  const [numeroSerie, setNumeroSerie] = useState('');
   const [dataFabricacao, setDataFabricacao] = useState('');
-  const [notaVenda, setNotaVenda] = useState('');
+  const [numeroSerie, setNumeroSerie] = useState('');
   const [notaCompra, setNotaCompra] = useState('');
+  const [notaVenda, setNotaVenda] = useState('');
   const [idSolicitacao, setIdSolicitacao] = useState('');
   const [fotos, setFotos] = useState([]);
   const [enviando, setEnviando] = useState(false);
-  const [feedback, setFeedback] = useState(null); // { tipo: 'erro' | 'sucesso', texto: string }
+  const [feedback, setFeedback] = useState(null); // { tipo: 'erro' | 'sucesso', texto, idGerado }
 
-  const fornLower = fornecedor.toLowerCase();
-  const catLower = categoria.toLowerCase();
+  useEffect(() => {
+    setFeedback(null);
+  }, [fornecedor]);
 
-  const exigeSerieENF =
-    catLower.includes('compressor') ||
-    catLower.includes('controladora') ||
-    catLower.includes('unidade condensadora') ||
-    fornLower.includes('danfoss');
+  const exigeSerieENota =
+    fornecedor === 'Danfoss' ||
+    ['Compressor', 'Controladora', 'Unidade Condensadora'].includes(categoria);
+  const exigeFabricacaoECompra = ['CP', 'Emicol'].includes(fornecedor);
+  const exigeTodasNotas = fornecedor === 'Full Gauge';
 
-  const exigeDataFabricacao =
-    fornLower.includes('cp') || fornLower.includes('emicol');
-
-  const exigeFoto = fornLower.includes('full gauge');
-
-  const adicionarFoto = async () => {
-    const permissao = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissao.granted) {
-      setFeedback({
-        tipo: 'erro',
-        texto: 'Autorize o acesso às fotos para anexar imagens da peça.'
-      });
+  const escolherFoto = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      setFeedback({ tipo: 'erro', texto: 'Permita o acesso à galeria para anexar fotos.' });
       return;
     }
 
-    const resultado = await ImagePicker.launchImageLibraryAsync({
+    const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.6,
-      base64: true
+      base64: true,
     });
 
-    if (!resultado.canceled && resultado.assets.length > 0) {
-      const asset = resultado.assets[0];
-      const imagemSalvar = asset.base64
+    if (!res.canceled && res.assets?.[0]) {
+      const asset = res.assets[0];
+      const uriFinal = asset.base64
         ? `data:image/jpeg;base64,${asset.base64}`
         : asset.uri;
-      setFotos([...fotos, imagemSalvar]);
+      setFotos((prev) => [...prev, uriFinal]);
     }
   };
 
-  const removerFoto = (index) => {
-    setFotos(fotos.filter((_, i) => i !== index));
+  const tirarFoto = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      setFeedback({ tipo: 'erro', texto: 'Permita o acesso à câmera para fotografar a peça.' });
+      return;
+    }
+
+    const res = await ImagePicker.launchCameraAsync({
+      quality: 0.6,
+      base64: true,
+    });
+
+    if (!res.canceled && res.assets?.[0]) {
+      const asset = res.assets[0];
+      const uriFinal = asset.base64
+        ? `data:image/jpeg;base64,${asset.base64}`
+        : asset.uri;
+      setFotos((prev) => [...prev, uriFinal]);
+    }
   };
 
   const salvarGarantia = async () => {
     setFeedback(null);
 
     if (!codigoPeca.trim()) {
-      setFeedback({ tipo: 'erro', texto: 'Informe o Código da Peça.' });
-      return;
-    }
-
-    if (exigeSerieENF) {
-      if (!numeroSerie.trim()) {
-        setFeedback({
-          tipo: 'erro',
-          texto: 'O Número de Série é obrigatório para esta peça/fornecedor.'
-        });
-        return;
-      }
-      if (!notaCompra.trim() && !notaVenda.trim()) {
-        setFeedback({
-          tipo: 'erro',
-          texto: 'Informe a Nota de Compra ou Nota de Venda.'
-        });
-        return;
-      }
-    }
-
-    if (exigeDataFabricacao && !dataFabricacao.trim()) {
-      setFeedback({
-        tipo: 'erro',
-        texto: 'A Data de Fabricação é obrigatória para CP e Emicol.'
-      });
-      return;
-    }
-
-    if (exigeFoto && fotos.length === 0) {
-      setFeedback({
-        tipo: 'erro',
-        texto: 'Adicione a foto de cada peça relacionada (obrigatório para Full Gauge).'
-      });
+      setFeedback({ tipo: 'erro', texto: 'Informe o Código da Peça antes de salvar.' });
       return;
     }
 
     setEnviando(true);
     try {
-      const resposta = await fetch(`${API_URL}/garantias`, {
+      const resp = await fetch(`${API_URL}/garantias`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fornecedor,
           categoria,
-          codigo_peca: codigoPeca,
-          nome_peca: nomePeca,
-          data_fabricacao: dataFabricacao,
-          numero_serie: numeroSerie,
-          nf_compra: notaCompra,
-          nf_venda: notaVenda,
-          id_solicitacao: idSolicitacao,
-          fotos
-        })
+          codigo_peca: codigoPeca.trim(),
+          nome_peca: nomePeca.trim() || codigoPeca.trim(),
+          data_fabricacao: dataFabricacao.trim(),
+          numero_serie: numeroSerie.trim(),
+          nf_compra: notaCompra.trim(),
+          nf_venda: notaVenda.trim(),
+          id_solicitacao: idSolicitacao.trim(),
+          fotos,
+        }),
       });
 
-      const dados = await resposta.json();
-
-      if (!resposta.ok) {
-        setFeedback({
-          tipo: 'erro',
-          texto: dados.erro || 'Não foi possível salvar.'
-        });
+      const dados = await resp.json();
+      if (!resp.ok) {
+        setFeedback({ tipo: 'erro', texto: dados.erro || 'Erro ao salvar garantia.' });
         return;
       }
 
       const idFormatado = `#${String(dados.id).padStart(4, '0')}`;
       setFeedback({
         tipo: 'sucesso',
-        texto: `Solicitação ${idFormatado} registrada com sucesso e enviada para acompanhamento!`
+        texto: `Garantia registrada com sucesso! ID Único: ${idFormatado}`,
+        idGerado: idFormatado,
       });
 
+      // Limpa os campos para o próximo registro
       setCodigoPeca('');
       setNomePeca('');
-      setNumeroSerie('');
       setDataFabricacao('');
-      setNotaVenda('');
+      setNumeroSerie('');
       setNotaCompra('');
+      setNotaVenda('');
       setIdSolicitacao('');
       setFotos([]);
-    } catch (erro) {
+    } catch (e) {
       setFeedback({
         tipo: 'erro',
-        texto: 'Erro de conexão: verifique se o node server.js está rodando na porta 8082.'
+        texto: 'Falha de conexão com o servidor (porta 8082).',
       });
     } finally {
       setEnviando(false);
@@ -173,213 +154,334 @@ export function TelaGarantia({ route, navigation }) {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
-      <Text style={styles.titulo}>{fornecedor}</Text>
-      <Text style={styles.status}>STATUS INICIAL: Em Tratamento</Text>
+    <View style={styles.tela}>
+      <CabecalhoMundial
+        titulo={`Solicitar Garantia — ${fornecedor}`}
+        subtitulo="Preencha os dados técnicos da peça e anexe fotos"
+        usuario={usuario}
+        navigation={navigation}
+      />
 
-      <Text style={styles.label}>Tipo / Categoria da Peça *</Text>
-      <View style={styles.categoriasRow}>
-        {categorias.map((cat) => (
-          <TouchableOpacity
-            key={cat}
-            style={[styles.chip, categoria === cat && styles.chipAtivo]}
-            onPress={() => setCategoria(cat)}
-          >
-            <Text style={[styles.chipTexto, categoria === cat && styles.chipTextoAtivo]}>
-              {cat}
+      <View style={styles.corpo}>
+        <BarraFornecedores
+          navigation={navigation}
+          usuario={usuario}
+          fornecedorAtivo={fornecedor}
+        />
+
+        <ScrollView contentContainerStyle={styles.areaPrincipal}>
+          {/* Cartão 1: Fabricante e Categoria */}
+          <View style={styles.cardSecao}>
+            <View style={styles.linhaTopoCard}>
+              <View>
+                <Text style={styles.etiquetaSecao}>FABRICANTE SELECIONADO</Text>
+                <Text style={styles.nomeFabricante}>{fornecedor}</Text>
+              </View>
+              <View style={styles.badgeStatusInicial}>
+                <Text style={styles.textoStatusInicial}>● Em Tratamento</Text>
+              </View>
+            </View>
+
+            <Text style={styles.label}>Categoria da Peça</Text>
+            <View style={styles.chipsRow}>
+              {CATEGORIAS.map((cat) => {
+                const ativo = categoria === cat;
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.chip, ativo && styles.chipAtivo]}
+                    onPress={() => setCategoria(cat)}
+                  >
+                    <Text style={[styles.chipTexto, ativo && styles.chipTextoAtivo]}>
+                      {cat}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Cartão 2: Identificação da Peça */}
+          <View style={styles.cardSecao}>
+            <Text style={styles.tituloBloco}>1. Identificação da Peça</Text>
+
+            <Text style={styles.label}>Código da Peça *</Text>
+            <TextInput
+              style={styles.input}
+              value={codigoPeca}
+              onChangeText={setCodigoPeca}
+              placeholder="Ex: A0123456789"
+            />
+
+            <Text style={styles.label}>Nome / Descrição da Peça</Text>
+            <TextInput
+              style={styles.input}
+              value={nomePeca}
+              onChangeText={setNomePeca}
+              placeholder="Ex: Compressor 1/4 R134a ou Placa Interface"
+            />
+
+            <Text style={styles.label}>
+              Número de Série {exigeSerieENota ? '* (Obrigatório)' : '(Opcional)'}
             </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+            <TextInput
+              style={styles.input}
+              value={numeroSerie}
+              onChangeText={setNumeroSerie}
+              placeholder="Ex: SN-987654321"
+            />
 
-      <Text style={styles.label}>Código da Peça *</Text>
-      <TextInput
-        style={styles.input}
-        value={codigoPeca}
-        onChangeText={setCodigoPeca}
-        placeholder="Ex: A0123456789"
-      />
+            <Text style={styles.label}>
+              Data de Fabricação {exigeFabricacaoECompra ? '* (Obrigatório)' : '(Opcional)'}
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={dataFabricacao}
+              onChangeText={setDataFabricacao}
+              placeholder="Ex: 15/08/2026 ou Lote 26W32"
+            />
+          </View>
 
-      <Text style={styles.label}>Nome / Descrição da Peça</Text>
-      <TextInput
-        style={styles.input}
-        value={nomePeca}
-        onChangeText={setNomePeca}
-        placeholder="Ex: Compressor 1/4 R134a"
-      />
+          {/* Cartão 3: Notas Fiscais e Protocolo */}
+          <View style={styles.cardSecao}>
+            <Text style={styles.tituloBloco}>2. Notas Fiscais e Protocolo</Text>
 
-      <Text style={styles.label}>
-        Número de Série {exigeSerieENF ? '* (Obrigatório)' : '(Opcional)'}
-      </Text>
-      <TextInput
-        style={[styles.input, exigeSerieENF && styles.inputDestaque]}
-        value={numeroSerie}
-        onChangeText={setNumeroSerie}
-        placeholder="Ex: SN-987654321"
-      />
+            <Text style={styles.label}>
+              Nota Fiscal de Compra {exigeFabricacaoECompra || exigeTodasNotas ? '* (Obrigatório)' : ''}
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={notaCompra}
+              onChangeText={setNotaCompra}
+              placeholder="Ex: 55890"
+              keyboardType="numeric"
+            />
 
-      <Text style={styles.label}>
-        Data de Fabricação {exigeDataFabricacao ? '* (Obrigatório)' : '(Opcional)'}
-      </Text>
-      <TextInput
-        style={[styles.input, exigeDataFabricacao && styles.inputDestaque]}
-        value={dataFabricacao}
-        onChangeText={setDataFabricacao}
-        placeholder="Ex: 15/08/2026"
-      />
+            <Text style={styles.label}>
+              Nota Fiscal de Venda (Cliente) {exigeSerieENota || exigeTodasNotas ? '* (Obrigatório)' : ''}
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={notaVenda}
+              onChangeText={setNotaVenda}
+              placeholder="Ex: 10452"
+              keyboardType="numeric"
+            />
 
-      <Text style={styles.label}>
-        Nota de Compra {exigeSerieENF ? '* (Obrigatório Compra ou Venda)' : '(Opcional)'}
-      </Text>
-      <TextInput
-        style={[styles.input, exigeSerieENF && styles.inputDestaque]}
-        value={notaCompra}
-        onChangeText={setNotaCompra}
-        keyboardType="numeric"
-        placeholder="Ex: 55890"
-      />
+            <Text style={styles.label}>ID da Solicitação (Site do Fabricante)</Text>
+            <TextInput
+              style={styles.input}
+              value={idSolicitacao}
+              onChangeText={setIdSolicitacao}
+              placeholder="Ex: REQ-2026-8841"
+            />
+          </View>
 
-      <Text style={styles.label}>
-        Nota de Venda (Cliente) {exigeSerieENF ? '* (Obrigatório Compra ou Venda)' : '(Opcional)'}
-      </Text>
-      <TextInput
-        style={[styles.input, exigeSerieENF && styles.inputDestaque]}
-        value={notaVenda}
-        onChangeText={setNotaVenda}
-        keyboardType="numeric"
-        placeholder="Ex: 10452"
-      />
+          {/* Cartão 4: Fotos da Peça / Etiqueta */}
+          <View style={styles.cardSecao}>
+            <Text style={styles.tituloBloco}>3. Fotos da Peça e Etiquetas</Text>
+            <Text style={styles.ajudaFoto}>
+              Anexe fotos da etiqueta, número de série ou defeito para consulta no Windows
+            </Text>
 
-      <Text style={styles.label}>ID da Solicitação (Site Fornecedor)</Text>
-      <TextInput
-        style={styles.input}
-        value={idSolicitacao}
-        onChangeText={setIdSolicitacao}
-        placeholder="Ex: REQ-2026-8841"
-      />
+            <View style={styles.botoesFotoRow}>
+              <TouchableOpacity style={styles.botaoFoto} onPress={tirarFoto}>
+                <Text style={styles.textoBotaoFoto}>📷 Tirar Foto</Text>
+              </TouchableOpacity>
 
-      <Text style={styles.label}>
-        Fotos das Peças {exigeFoto ? '* (Obrigatório para Full Gauge)' : '(Opcional — aparece no acompanhamento)'}
-      </Text>
-      <TouchableOpacity style={styles.botaoFoto} onPress={adicionarFoto}>
-        <Text style={styles.botaoFotoTexto}>+ Adicionar Foto da Peça</Text>
-      </TouchableOpacity>
+              <TouchableOpacity style={styles.botaoFoto} onPress={escolherFoto}>
+                <Text style={styles.textoBotaoFoto}>🖼️ Escolher da Galeria</Text>
+              </TouchableOpacity>
+            </View>
 
-      <View style={styles.listaFotos}>
-        {fotos.map((uri, index) => (
-          <TouchableOpacity key={index} onPress={() => removerFoto(index)} style={styles.fotoWrapper}>
-            <Image source={{ uri }} style={styles.miniatura} />
-            <Text style={styles.removerTexto}>Remover</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+            {fotos.length > 0 && (
+              <View style={styles.gradeFotos}>
+                {fotos.map((uri, idx) => (
+                  <View key={idx} style={styles.boxMiniatura}>
+                    <Image source={{ uri }} style={styles.miniatura} />
+                    <TouchableOpacity
+                      style={styles.btnRemoverFoto}
+                      onPress={() => setFotos((prev) => prev.filter((_, i) => i !== idx))}
+                    >
+                      <Text style={styles.textoRemover}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
 
-      {feedback && (
-        <View
-          style={[
-            styles.boxFeedback,
-            feedback.tipo === 'erro' ? styles.boxErro : styles.boxSucesso
-          ]}
-        >
-          <Text
-            style={
-              feedback.tipo === 'erro' ? styles.textoErro : styles.textoSucesso
-            }
-          >
-            {feedback.texto}
-          </Text>
-
-          {feedback.tipo === 'sucesso' && navigation && (
-            <TouchableOpacity
-              style={styles.botaoIrAcompanhamento}
-              onPress={() => navigation.navigate('GarantiasTratadas')}
+          {/* Mensagem de Feedback */}
+          {feedback && (
+            <View
+              style={[
+                styles.boxFeedback,
+                feedback.tipo === 'sucesso' ? styles.feedbackSucesso : styles.feedbackErro,
+              ]}
             >
-              <Text style={styles.textoIrAcompanhamento}>
-                Ir para Acompanhamento de Tratativas
+              <Text
+                style={[
+                  styles.textoFeedback,
+                  feedback.tipo === 'sucesso' ? styles.textoSucesso : styles.textoErro,
+                ]}
+              >
+                {feedback.texto}
               </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
 
-      <TouchableOpacity
-        style={[styles.botaoSalvar, enviando && { opacity: 0.6 }]}
-        onPress={salvarGarantia}
-        disabled={enviando}
-      >
-        <Text style={styles.botaoSalvarTexto}>
-          {enviando ? 'Salvando...' : 'Salvar e Registrar no Banco'}
-        </Text>
-      </TouchableOpacity>
-    </ScrollView>
+              {feedback.tipo === 'sucesso' && (
+                <TouchableOpacity
+                  style={styles.botaoVerLista}
+                  onPress={() => navigation.navigate('GarantiasTratadas', { usuario })}
+                >
+                  <Text style={styles.textoBotaoVerLista}>
+                    Ir para Acompanhamento de Garantias →
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {/* Botão Principal */}
+          <TouchableOpacity
+            style={styles.botaoSalvar}
+            onPress={salvarGarantia}
+            disabled={enviando}
+          >
+            {enviando ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.textoSalvar}>Salvar e Registrar Garantia</Text>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#f5f5f5' },
-  titulo: { fontSize: 22, fontWeight: 'bold', marginBottom: 4, color: '#222' },
-  status: { fontSize: 13, color: '#e65100', marginBottom: 18, fontWeight: 'bold' },
-  label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 6 },
-  categoriasRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  chip: {
-    paddingVertical: 8,
+  tela: { flex: 1, backgroundColor: TEMA.cores.fundoTela },
+  corpo: { flex: 1, flexDirection: 'row' },
+  areaPrincipal: { padding: 20, paddingBottom: 50, maxWidth: 860, width: '100%' },
+  cardSecao: {
+    backgroundColor: TEMA.cores.cardBranco,
+    borderRadius: 18,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: TEMA.cores.azulBorda,
+    ...TEMA.sombraSuave,
+  },
+  linhaTopoCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  etiquetaSecao: { fontSize: 11, fontWeight: '700', color: TEMA.cores.textoSuave },
+  nomeFabricante: { fontSize: 22, fontWeight: 'bold', color: TEMA.cores.azulMundial },
+  badgeStatusInicial: {
+    backgroundColor: '#FEF3C7',
+    paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
-    backgroundColor: '#e0e0e0'
+    borderWidth: 1,
+    borderColor: '#F59E0B',
   },
-  chipAtivo: { backgroundColor: '#007AFF' },
-  chipTexto: { fontSize: 13, color: '#333', fontWeight: '500' },
-  chipTextoAtivo: { color: '#fff', fontWeight: 'bold' },
+  textoStatusInicial: { color: '#B45309', fontWeight: 'bold', fontSize: 12 },
+  tituloBloco: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: TEMA.cores.azulMundial,
+    marginBottom: 12,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: TEMA.cores.textoEscuro,
+    marginBottom: 6,
+    marginTop: 6,
+  },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
     padding: 12,
-    marginBottom: 15,
-    fontSize: 15
+    fontSize: 14,
+    color: TEMA.cores.textoEscuro,
+    marginBottom: 8,
   },
-  inputDestaque: { borderColor: '#ff9800', borderWidth: 1.5 },
-  botaoFoto: {
-    backgroundColor: '#e3f2fd',
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  chip: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: TEMA.cores.fundoTela,
     borderWidth: 1,
-    borderColor: '#2196f3',
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    padding: 14,
+    borderColor: '#CBD5E1',
+  },
+  chipAtivo: {
+    backgroundColor: TEMA.cores.azulMundial,
+    borderColor: TEMA.cores.azulMundial,
+  },
+  chipTexto: { fontSize: 12, fontWeight: '600', color: TEMA.cores.textoSuave },
+  chipTextoAtivo: { color: TEMA.cores.branco },
+  ajudaFoto: { fontSize: 12, color: TEMA.cores.textoSuave, marginBottom: 12 },
+  botoesFotoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  botaoFoto: {
+    backgroundColor: TEMA.cores.azulClaro,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: TEMA.cores.azulBorda,
+  },
+  textoBotaoFoto: { color: TEMA.cores.azulMundial, fontWeight: 'bold', fontSize: 13 },
+  gradeFotos: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14 },
+  boxMiniatura: { position: 'relative' },
+  miniatura: {
+    width: 76,
+    height: 76,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: TEMA.cores.azulBorda,
+  },
+  btnRemoverFoto: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: TEMA.cores.perigo,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12
   },
-  botaoFotoTexto: { color: '#1565c0', fontWeight: 'bold' },
-  listaFotos: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
-  fotoWrapper: { alignItems: 'center' },
-  miniatura: { width: 70, height: 70, borderRadius: 6 },
-  removerTexto: { fontSize: 11, color: '#d32f2f', marginTop: 2 },
-  boxFeedback: {
-    padding: 14,
-    borderRadius: 8,
-    marginBottom: 14,
-    borderWidth: 1
-  },
-  boxErro: { backgroundColor: '#fef2f2', borderColor: '#ef4444' },
-  boxSucesso: { backgroundColor: '#f0fdf4', borderColor: '#22c55e' },
-  textoErro: { color: '#b91c1c', fontWeight: '600', fontSize: 14 },
-  textoSucesso: { color: '#15803d', fontWeight: '600', fontSize: 14 },
-  botaoIrAcompanhamento: {
+  textoRemover: { color: '#FFF', fontSize: 11, fontWeight: 'bold' },
+  boxFeedback: { padding: 16, borderRadius: 14, marginBottom: 16, borderWidth: 1 },
+  feedbackSucesso: { backgroundColor: '#DCFCE7', borderColor: '#22C55E' },
+  feedbackErro: { backgroundColor: '#FEE2E2', borderColor: '#EF4444' },
+  textoFeedback: { fontWeight: 'bold', fontSize: 14 },
+  textoSucesso: { color: '#15803D' },
+  textoErro: { color: '#B91C1C' },
+  botaoVerLista: {
     marginTop: 10,
-    backgroundColor: '#15803d',
+    backgroundColor: '#15803D',
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderRadius: 6,
-    alignItems: 'center'
+    borderRadius: 10,
+    alignSelf: 'flex-start',
   },
-  textoIrAcompanhamento: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
+  textoBotaoVerLista: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
   botaoSalvar: {
-    backgroundColor: '#007AFF',
-    padding: 15,
-    borderRadius: 8,
+    backgroundColor: TEMA.cores.azulMundial,
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: 'center',
-    marginTop: 6
+    ...TEMA.sombraSuave,
   },
-  botaoSalvarTexto: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
+  textoSalvar: { color: TEMA.cores.branco, fontSize: 16, fontWeight: 'bold' },
 });
