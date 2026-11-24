@@ -12,13 +12,13 @@ import { TEMA } from '../utils/tema';
 
 // Quando você salvar os logos dos fornecedores em app/src/assets/, basta descomentar o require correspondente:
 export const LISTA_FORNECEDORES = [
-  { id: '1', nome: 'Electrolux', categoria: 'Eletrodomésticos', sigla: 'ELX', cor: '#0F294A', logo: null /* require('../assets/logo-electrolux.png') */ },
-  { id: '2', nome: 'Whirlpool', categoria: 'Eletrodomésticos', sigla: 'WHP', cor: '#B45309', logo: null /* require('../assets/logo-whirlpool.png') */ },
-  { id: '3', nome: 'CP', categoria: 'Placas Eletrônicas', sigla: 'CP', cor: '#1D4ED8', logo: null /* require('../assets/logo-cp.png') */ },
-  { id: '4', nome: 'Emicol', categoria: 'Placas e Componentes', sigla: 'EMC', cor: '#0369A1', logo: null /* require('../assets/logo-emicol.png') */ },
-  { id: '5', nome: 'Danfoss', categoria: 'Compressores e Refrigeração', sigla: 'DNF', cor: '#DC2626', logo: null /* require('../assets/logo-danfoss.png') */ },
-  { id: '6', nome: 'Full Gauge', categoria: 'Controladores Digitais', sigla: 'FG', cor: '#15803D', logo: null /* require('../assets/logo-fullgauge.png') */ },
-  { id: '7', nome: 'AGT', categoria: 'Peças de Refrigeração', sigla: 'AGT', cor: '#4338CA', logo: null /* require('../assets/logo-agt.png') */ },
+  { id: '1', nome: 'Electrolux', categoria: 'Eletrodomésticos', sigla: 'ELX', cor: '#0F294A', logo: require('../assets/logo-electrolux.png') },
+  { id: '2', nome: 'Whirlpool', categoria: 'Eletrodomésticos', sigla: 'WHP', cor: '#B45309', logo: require('../assets/logo-whirlpool.png')},
+  { id: '3', nome: 'CP', categoria: 'Placas Eletrônicas', sigla: 'CP', cor: '#1D4ED8', logo: require('../assets/logo-cp.png')  },
+  { id: '4', nome: 'Emicol', categoria: 'Placas e Componentes', sigla: 'EMC', cor: '#0369A1', logo: require('../assets/logo-emicol.png')  },
+  { id: '5', nome: 'Danfoss', categoria: 'Compressores e Refrigeração', sigla: 'DNF', cor: '#DC2626', logo: require('../assets/logo-danfoss.png') },
+  { id: '6', nome: 'Full Gauge', categoria: 'Controladores Digitais', sigla: 'FG', cor: '#15803D', logo: require('../assets/logo-fullgauge.png') },
+  { id: '7', nome: 'AGT', categoria: 'Peças de Refrigeração', sigla: 'AGT', cor: '#4338CA', logo: require('../assets/logo-agt.png') },
 ];
 
 export function BarraFornecedores({ navigation, usuario, fornecedorAtivo }) {
